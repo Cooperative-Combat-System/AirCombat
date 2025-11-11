@@ -1,0 +1,22 @@
+task: mycombat
+
+host: 10.119.13.38
+agent_ports: [1000, 1001]
+agent_count: 2
+max_steps: 1000
+my_camp: 0
+initial_states:
+  camp_0:
+    - camp_idx: 0
+      camp_unit_idx: 0
+      position: [0, 0, 100]
+      rotation: [0, 0, 0]
+      linear_v: [20, 0, 0]
+      angular_v: [0, 0, 0]
+  camp_1:
+    - camp_idx: 1
+      camp_unit_idx: 0
+      position: [100, 0, 100]
+      rotation: [3.1415926, 0, 0]
+      linear_v: [-20, 0, 0]
+      angular_v: [0, 0, 0]
