@@ -6,7 +6,33 @@ from ..termination_conditions import MyTerminationV1
 from ..reward_functions import MyRewardFunctionV1
 from ..utils.adaptor_v1 import NetworkAdaptorV1
 
+R_MAX = 300.0   # m
+H_MAX = 150.0   # m
+V_MAX = 40.0    # m/s
+EPS   = 1e-6
 
+def _rot_world_to_body_xy(dx, dy, yaw):
+    """
+    用 yaw 做 2D 机体系旋转（机头为 +x，右侧为 +y）
+    body = R(-yaw) * world
+    """
+    c, s = np.cos(yaw), np.sin(yaw)
+    bx =  c * dx + s * dy
+    by = -s * dx + c * dy
+    return bx, by
+
+def _clip01(x):
+    return float(np.clip(x, 0.0, 1.0))
+
+def _clip11(x):
+    return float(np.clip(x, -1.0, 1.0))
+
+def _bearing(dx, dy):
+    return float(np.arctan2(dy, dx))  # (-pi, pi]
+
+def _angle_wrap_pi(a):
+    # wrap to (-pi, pi]
+    return float((a + np.pi) % (2*np.pi) - np.pi)
 
 class MyCombatTaskV1(BaseTask):
     def __init__(self, config):
@@ -79,88 +105,102 @@ class MyCombatTaskV1(BaseTask):
     #     return norm_obs
 
     def get_obs(self, env, agent_id):
-        ego = env.agents[agent_id]
-        my = ego.my_state  # [x,y,z, yaw,pitch,roll, vx,vy,vz, fx,fy,fz, hp]
-        enm = ego.enemy_state
+        agent = env.agents[agent_id]
+        my_state = agent.my_state
+        enm_state = agent.enemy_state
 
-        # --- 取各字段 ---
-        my_pos = np.asarray(my[0:3], dtype=np.float32)
-        my_rot = np.asarray(my[3:6], dtype=np.float32)  # yaw,pitch,roll（弧度）
-        my_vel = np.asarray(my[6:9], dtype=np.float32)
-        my_hp = float(my[12])
+        # 解包
+        mx, my, mz = float(my_state[0]), float(my_state[1]), float(my_state[2])
+        mr, mp, myaw = float(my_state[3]), float(my_state[4]), float(my_state[5])
+        mvx, mvy, mvz = float(my_state[6]), float(my_state[7]), float(my_state[8])
+        # fwd = my_state[9:12]  # 如果需要可用，但这里采用 yaw 近似
+        my_hp = float(my_state[12])
 
-        enm_pos = np.asarray(enm[0:3], dtype=np.float32)
-        enm_vel = np.asarray(enm[6:9], dtype=np.float32)
-        enm_hp = float(enm[12])
+        ex, ey, ez = float(enm_state[0]), float(enm_state[1]), float(enm_state[2])
+        evx, evy, evz = float(enm_state[6]), float(enm_state[7]), float(enm_state[8])
+        enm_hp = float(enm_state[12])
 
-        # --- 姿态旋转矩阵（世界->机体）: 以自机为参照 ---
-        yaw, pitch, roll = my_rot
-        cy, sy = np.cos(yaw), np.sin(yaw)
-        cp, sp = np.cos(pitch), np.sin(pitch)
-        cr, sr = np.cos(roll), np.sin(roll)
-        # ZYX (yaw-pitch-roll) 机体->世界，故世界->机体用转置
-        R_w2b = np.array([
-            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-            [-sp, cp * sr, cp * cr],
-        ], dtype=np.float32).T  # 转置得到世界->机体
+        # 相对量（世界系）
+        dx, dy, dz = (ex - mx), (ey - my), (ez - mz)
+        dvx, dvy, dvz = (evx - mvx), (evy - mvy), (evz - mvz)
 
-        # --- 相对量（机体系）---
-        r_rel_w = enm_pos - my_pos
-        v_rel_w = enm_vel - my_vel
-        r_rel_b = R_w2b @ r_rel_w
-        v_rel_b = R_w2b @ v_rel_w
+        # 机体系（用 yaw 旋转）
+        rel_bx, rel_by = _rot_world_to_body_xy(dx, dy, myaw)
+        rel_vbx, rel_vby = _rot_world_to_body_xy(dvx, dvy, myaw)
 
-        R_h = np.hypot(r_rel_w[0], r_rel_w[1])  # 水平距离 (m)
-        R_3 = np.linalg.norm(r_rel_w) + 1e-8  # 3D 距离 (m)
-        r_hat_w = r_rel_w / R_3
+        # 距离、速度、闭合率
+        Rh = float(np.hypot(dx, dy))
+        my_spd = float(np.hypot(mvx, mvy))
+        enm_spd = float(np.hypot(evx, evy))
 
-        # AO（自机速度 vs LOS(ego->enemy)）
-        v_e = np.linalg.norm(my_vel[:2]) + 1e-8
-        dot_e = (my_vel[0] * r_hat_w[0] + my_vel[1] * r_hat_w[1])
-        crs_e = (my_vel[0] * r_hat_w[1] - my_vel[1] * r_hat_w[0])
-        AO = np.arctan2(abs(crs_e), dot_e)  # 0~pi
-        cos_AO = np.cos(AO)
+        dist_feat = _clip01(Rh / max(R_MAX, EPS))
+        rel_height = _clip11(dz / max(H_MAX, EPS))
+        rel_pos_body_x = _clip11(rel_bx / max(R_MAX, EPS))
+        rel_pos_body_y = _clip11(rel_by / max(R_MAX, EPS))
+        rel_vel_body_x = _clip11(rel_vbx / max(V_MAX, EPS))
+        rel_vel_body_y = _clip11(rel_vby / max(V_MAX, EPS))
+        my_spd_n = _clip01(my_spd / max(V_MAX, EPS))
+        enm_spd_n = _clip01(enm_spd / max(V_MAX, EPS))
 
-        # TA（敌机速度 vs LOS(enemy->ego)）
-        v_n = np.linalg.norm(enm_vel[:2]) + 1e-8
-        rxn, ryn = -r_hat_w[0], -r_hat_w[1]
-        dot_n = (enm_vel[0] * rxn + enm_vel[1] * ryn)
-        crs_n = (enm_vel[0] * ryn - enm_vel[1] * rxn)
-        TA = np.arctan2(abs(crs_n), dot_n)
-        cos_TA = np.cos(TA)
+        # AO/TA/R_h：复用你已有的几何函数（只取 AO, TA, Rh）
+        ego_feature = np.array([mx, my, mz, mvx, mvy, mvz], dtype=np.float32)
+        enm_feature = np.array([ex, ey, ez, evx, evy, evz], dtype=np.float32)
+        AO, TA, _Rh = self.get2d_AO_TA_R_ue(ego_feature, enm_feature)  # AO: rad
+        facing_cos = float(np.cos(float(np.clip(AO, 0.0, np.pi))))
 
-        # 闭合率（沿 LOS 的接近速度, m/s，接近为正）
-        Vc = -(v_rel_w[0] * r_hat_w[0] + v_rel_w[1] * r_hat_w[1])
+        # 闭合率：相对径向速度/最大尺度
+        closure = _clip11((dx * dvx + dy * dvy) / (R_MAX * V_MAX + EPS))
 
-        # 侧向率（垂直 LOS 的相对速度模）
-        Vlat = abs(v_rel_w[0] * r_hat_w[1] - v_rel_w[1] * r_hat_w[0])
+        # LOS 角速率：按步差分
+        if not hasattr(env, "_obs_cache"):
+            env._obs_cache = {}
+        if agent_id not in env._obs_cache:
+            env._obs_cache[agent_id] = {}
+        prev_bearing = env._obs_cache[agent_id].get("bearing", _bearing(dx, dy))
+        curr_bearing = _bearing(dx, dy)
+        dpsi = _angle_wrap_pi(curr_bearing - prev_bearing)
+        env._obs_cache[agent_id]["bearing"] = curr_bearing
+        los_rate = _clip11(dpsi / np.pi)  # 归一化到 [-1,1]
 
-        # 低空与高度差
-        delta_h = (enm_pos[2] - my_pos[2]) / 100.0
+        # 姿态 sin/cos（roll/pitch）
+        roll_s, roll_c = float(np.sin(mr)), float(np.cos(mr))
+        pitch_s, pitch_c = float(np.sin(mp)), float(np.cos(mp))
 
-        # 观测拼装（示例 18 维，可按空间限制删减）
+        # HP 归一化（按你的实际范围修改；若已 0~1 可直接用）
+        # 假设 0~100：
+        if my_hp > 1.0 or enm_hp > 1.0:
+            my_hp_n = _clip01(my_hp / 100.0)
+            enm_hp_n = _clip01(enm_hp / 100.0)
+        else:
+            my_hp_n, enm_hp_n = _clip01(my_hp), _clip01(enm_hp)
+
+        # 侧向标志：z 分量为 0 的 2D 叉乘
+        cross_z = mvx * dy - mvy * dx
+        side_flag = float(np.sign(cross_z))  # {-1, 0, 1}
+
         obs = np.array([
-            # 机体系相对位置/速度（裁剪/归一见下）
-            r_rel_b[0] / 1000.0, r_rel_b[1] / 1000.0, r_rel_b[2] / 1000.0,
-            v_rel_b[0] / 100.0, v_rel_b[1] / 100.0, v_rel_b[2] / 100.0,
-
-            # 姿态（自机）
-            np.sin(roll), np.cos(roll),
-            np.sin(pitch), np.cos(pitch),
-
-            # 几何量
-            cos_AO, cos_TA,
-            R_h / 1000.0,  # km
-            Vc / 100.0, Vlat / 100.0,  # 归一
-
-            # 生命值
-            my_hp, enm_hp,
-
-            # 高度差
-            delta_h,
+            rel_pos_body_x,  # 0
+            rel_pos_body_y,  # 1
+            rel_height,  # 2
+            dist_feat,  # 3
+            rel_vel_body_x,  # 4
+            rel_vel_body_y,  # 5
+            my_spd_n,  # 6
+            enm_spd_n,  # 7
+            facing_cos,  # 8
+            closure,  # 9
+            los_rate,  # 10
+            roll_s,  # 11
+            roll_c,  # 12
+            pitch_s,  # 13
+            pitch_c,  # 14
+            my_hp_n,  # 15
+            enm_hp_n,  # 16
+            side_flag  # 17
         ], dtype=np.float32)
-        obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
+
+        # 最终裁剪到 Box
+        obs = np.clip(obs, env.observation_space.low, env.observation_space.high)
         return obs
 
     def normalize_action(self, env, agent_id, action):

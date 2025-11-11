@@ -31,8 +31,8 @@ class MyRewardFunctionV1(BaseRewardFunction):
         self.kill_bonus = 4.0
         self.death_pen  = -4.0
         # 软边界（与终止条件对齐 |x|、|y|<=150）
-        self.arena_half_size   = getattr(config, "arena_half_size", 150.0)  # m
-        self.soft_band_start   = getattr(config, "soft_band_start", 140.0)  # m，开始“感觉到边界”
+        self.arena_half_size   = getattr(config, "arena_half_size", 300.0)  # m
+        self.soft_band_start   = getattr(config, "soft_band_start", 250.0)  # m，开始“感觉到边界”
         self.soft_band_k       = getattr(config, "soft_band_k", 1.0)        # 斜率
         self.soft_band_weight  = getattr(config, "soft_band_weight", 0.5)   # 惩罚权重（可小）
 

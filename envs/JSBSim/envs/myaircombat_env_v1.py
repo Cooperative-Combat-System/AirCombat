@@ -7,8 +7,8 @@ import random
 from collections import defaultdict
 
 def generate_initial_state():
-    my_initial_state = np.array([0, 0, 100, 0, 0, 0, 10, 0, 0, 0, 0, 0])
-    enemy_initial_state = np.array([100, 0, 100, 3.14, 0, 0, -10, 0, 0, 0, 0, 0])
+    my_initial_state = np.array([0, random.uniform(-20,20), random.uniform(100,120), 0, 0, 0, 10, 0, 0, 0, 0, 0])
+    enemy_initial_state = np.array([random.uniform(80,120), random.uniform(-20,20), random.uniform(100,120), 3.14, 0, 0, -10, 0, 0, 0, 0, 0])
     return my_initial_state, enemy_initial_state
 
 class AirCombatEnvV1(BaseEnv):
