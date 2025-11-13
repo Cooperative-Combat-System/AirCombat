@@ -5,7 +5,7 @@ class MyTerminationV1(BaseTerminationCondition):
     def __init__(self, config):
         super().__init__(config)
         self.max_steps = 1000  # 直接写死最大步数
-        self.altitude_limit = 50  # 高度单位为米，0 以下为坠毁
+        self.altitude_limit = 30  # 高度单位为米，0 以下为坠毁
         self.arena_size = 500
 
     def get_termination(self, task, env, agent_id, info={}):

@@ -23,8 +23,8 @@ class MyRewardFunctionV1(BaseRewardFunction):
 
     def __init__(self, config):
         super().__init__(config)
-        self.safe_altitude = 90  # 安全高度上限（米）
-        self.danger_altitude = 50  # 危险高度（米）
+        self.safe_altitude = 50  # 安全高度上限（米）
+        self.danger_altitude = 40  # 危险高度（米）
         self.hp_scale = 100.0
         self.Kv = 10.0  # 垂直速度惩罚系数
         self.target_dist = 60  # 期望作战距离（米）
