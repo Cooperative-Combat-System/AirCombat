@@ -55,7 +55,7 @@ class MyCombatTaskV1(BaseTask):
         ]
 
     def load_observation_space(self):
-        self.observation_space = spaces.Box(low=-1, high=1., shape=(18,))
+        self.observation_space = spaces.Box(low=-1, high=1., shape=(20,))
 
     def load_action_space(self):
         # aileron, elevator, rudder, throttle
@@ -113,7 +113,6 @@ class MyCombatTaskV1(BaseTask):
         mx, my, mz = float(my_state[0]), float(my_state[1]), float(my_state[2])
         mr, mp, myaw = float(my_state[3]), float(my_state[4]), float(my_state[5])
         mvx, mvy, mvz = float(my_state[6]), float(my_state[7]), float(my_state[8])
-        # fwd = my_state[9:12]  # 如果需要可用，但这里采用 yaw 近似
         my_hp = float(my_state[12])
 
         ex, ey, ez = float(enm_state[0]), float(enm_state[1]), float(enm_state[2])
@@ -128,7 +127,7 @@ class MyCombatTaskV1(BaseTask):
         rel_bx, rel_by = _rot_world_to_body_xy(dx, dy, myaw)
         rel_vbx, rel_vby = _rot_world_to_body_xy(dvx, dvy, myaw)
 
-        # 距离、速度、闭合率
+        # 距离、速度
         Rh = float(np.hypot(dx, dy))
         my_spd = float(np.hypot(mvx, mvy))
         enm_spd = float(np.hypot(evx, evy))
@@ -142,16 +141,27 @@ class MyCombatTaskV1(BaseTask):
         my_spd_n = _clip01(my_spd / max(V_MAX, EPS))
         enm_spd_n = _clip01(enm_spd / max(V_MAX, EPS))
 
-        # AO/TA/R_h：复用你已有的几何函数（只取 AO, TA, Rh）
+        # 自机高度/垂直速度（配合奖励）
+        my_alt_n = _clip01(mz / max(H_MAX, EPS))
+        my_vz_n = _clip11(mvz / max(15, EPS))  # VZ_MAX 你自己定义一个常量
+
+        # AO/TA/R_h：复用几何函数
         ego_feature = np.array([mx, my, mz, mvx, mvy, mvz], dtype=np.float32)
         enm_feature = np.array([ex, ey, ez, evx, evy, evz], dtype=np.float32)
-        AO, TA, _Rh = self.get2d_AO_TA_R_ue(ego_feature, enm_feature)  # AO: rad
-        facing_cos = float(np.cos(float(np.clip(AO, 0.0, np.pi))))
+        AO, TA, _Rh = self.get2d_AO_TA_R_ue(ego_feature, enm_feature)
+        AO = float(np.clip(AO, 0.0, np.pi))
+        TA = float(np.clip(TA, 0.0, np.pi))
+        facing_cos = float(np.cos(AO))
+        aspect_cos = float(np.cos(TA))  # 新增
 
-        # 闭合率：相对径向速度/最大尺度
-        closure = _clip11((dx * dvx + dy * dvy) / (R_MAX * V_MAX + EPS))
+        # 闭合率：径向速度 / V_MAX
+        if Rh > 1e-3:
+            Vr = (dx * dvx + dy * dvy) / Rh
+        else:
+            Vr = 0.0
+        closure = _clip11(Vr / max(V_MAX, EPS))
 
-        # LOS 角速率：按步差分
+        # LOS 角速率
         if not hasattr(env, "_obs_cache"):
             env._obs_cache = {}
         if agent_id not in env._obs_cache:
@@ -160,23 +170,22 @@ class MyCombatTaskV1(BaseTask):
         curr_bearing = _bearing(dx, dy)
         dpsi = _angle_wrap_pi(curr_bearing - prev_bearing)
         env._obs_cache[agent_id]["bearing"] = curr_bearing
-        los_rate = _clip11(dpsi / np.pi)  # 归一化到 [-1,1]
+        los_rate = _clip11(dpsi / np.pi)
 
-        # 姿态 sin/cos（roll/pitch）
+        # 姿态 sin/cos
         roll_s, roll_c = float(np.sin(mr)), float(np.cos(mr))
         pitch_s, pitch_c = float(np.sin(mp)), float(np.cos(mp))
 
-        # HP 归一化（按你的实际范围修改；若已 0~1 可直接用）
-        # 假设 0~100：
+        # HP 归一化
         if my_hp > 1.0 or enm_hp > 1.0:
             my_hp_n = _clip01(my_hp / 100.0)
             enm_hp_n = _clip01(enm_hp / 100.0)
         else:
             my_hp_n, enm_hp_n = _clip01(my_hp), _clip01(enm_hp)
 
-        # 侧向标志：z 分量为 0 的 2D 叉乘
+        # 侧向标志
         cross_z = mvx * dy - mvy * dx
-        side_flag = float(np.sign(cross_z))  # {-1, 0, 1}
+        side_flag = float(np.sign(cross_z))
 
         obs = np.array([
             rel_pos_body_x,  # 0
@@ -187,19 +196,21 @@ class MyCombatTaskV1(BaseTask):
             rel_vel_body_y,  # 5
             my_spd_n,  # 6
             enm_spd_n,  # 7
-            facing_cos,  # 8
-            closure,  # 9
-            los_rate,  # 10
-            roll_s,  # 11
-            roll_c,  # 12
-            pitch_s,  # 13
-            pitch_c,  # 14
-            my_hp_n,  # 15
-            enm_hp_n,  # 16
-            side_flag  # 17
+            my_alt_n,  # 8  (new)
+            my_vz_n,  # 9  (new)
+            facing_cos,  # 10
+            aspect_cos,  # 11 (new)
+            closure,  # 12
+            los_rate,  # 13
+            roll_s,  # 14
+            roll_c,  # 15
+            pitch_s,  # 16
+            pitch_c,  # 17
+            my_hp_n,  # 18
+            enm_hp_n,  # 19
+            side_flag  # 20
         ], dtype=np.float32)
 
-        # 最终裁剪到 Box
         obs = np.clip(obs, env.observation_space.low, env.observation_space.high)
         return obs
 
