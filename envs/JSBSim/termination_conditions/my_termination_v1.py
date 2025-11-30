@@ -7,8 +7,8 @@ class MyTerminationV1(BaseTerminationCondition):
         super().__init__(config)
         # 基础：步数/高度/边界
         self.max_steps       = getattr(config, "max_steps", 1000)
-        self.altitude_limit  = getattr(config, "altitude_limit", 30.0)   # m（低于则坠毁）
-        self.arena_size      = getattr(config, "arena_size", 500.0)      # |x|,|y| 硬边界
+        self.altitude_limit  = getattr(config, "altitude_limit", 20.0)   # m（低于则坠毁）
+        self.arena_size      = getattr(config, "arena_size", 550.0)      # |x|,|y| 硬边界
 
         # 新增：出界宽限（连续 N 步在界外才终止）
         self.oob_grace_steps = getattr(config, "oob_grace_steps", 60)    # 例如 60 步≈3s（dt=0.05）

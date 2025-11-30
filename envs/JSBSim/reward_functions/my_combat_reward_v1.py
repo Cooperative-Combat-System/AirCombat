@@ -33,12 +33,12 @@ class MyRewardFunctionV1(BaseRewardFunction):
 
         # 作战圈/目标距离（与你给的一致）
         self.target_dist = getattr(config, "target_dist", 60.0)  # m
-        self.sigma_R     = getattr(config, "sigma_R", 30.0)      # m（高斯宽度）
+        self.sigma_R     = getattr(config, "sigma_R", 25.0)      # m（高斯宽度）
 
         # WEZ（2°×2°×60m）
-        self.wez_max_range = getattr(config, "wez_max_range", 60.0)
-        self.wez_hdeg      = np.deg2rad(getattr(config, "wez_hdeg", 2.0))  # 水平偏角阈值（AO）
-        self.wez_vdeg      = np.deg2rad(getattr(config, "wez_vdeg", 2.0))  # 垂直偏角阈值（elev_off）
+        self.wez_max_range = getattr(config, "wez_max_range", 80.0)
+        self.wez_hdeg      = np.deg2rad(getattr(config, "wez_hdeg", 5.0))  # 水平偏角阈值（AO）
+        self.wez_vdeg      = np.deg2rad(getattr(config, "wez_vdeg", 5.0))  # 垂直偏角阈值（elev_off）
 
         # 软边界
         self.arena_half_size   = getattr(config, "arena_half_size", 500.0)
@@ -48,15 +48,15 @@ class MyRewardFunctionV1(BaseRewardFunction):
 
         # 姿态/低空/圈内机动权重
         self.w_posture  = getattr(config, "w_posture", 2.0)
-        self.w_altitude = getattr(config, "w_altitude", 0.3)
+        self.w_altitude = getattr(config, "w_altitude", 0.1)
         self.w_trend    = getattr(config, "w_trend",   0.10)  # AO 变小趋势
         self.w_turn     = getattr(config, "w_turn",    0.05)  # 圈内机动
 
         # 黏斗相关权重
-        self.w_stick      = getattr(config, "w_stick", 0.10)   # WEZ 连续驻留奖励（每步）
-        self.w_approach   = getattr(config, "w_approach", 0.10) # 圈外接近奖励
-        self.w_disengage  = getattr(config, "w_disengage", 0.10) # 脱离趋势惩罚
-        self.stick_max    = getattr(config, "stick_max",  30)   # streak 上限（步）
+        self.w_stick      = getattr(config, "w_stick", 0.25)   # WEZ 连续驻留奖励（每步）
+        self.w_approach   = getattr(config, "w_approach", 0.30) # 圈外接近奖励
+        self.w_disengage  = getattr(config, "w_disengage", 0.05) # 脱离趋势惩罚
+        self.stick_max    = getattr(config, "stick_max",  80)   # streak 上限（步）
 
         # 终局
         self.kill_bonus = getattr(config, "kill_bonus",  4.0)
