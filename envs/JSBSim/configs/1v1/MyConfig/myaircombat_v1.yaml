@@ -1,6 +1,6 @@
 task: mycombatv1
 
 host: 10.119.13.38
-agent_ports: [1000, 1001]
+agent_ports: [1002, 1003]
 agent_count: 2
-max_steps: 1000
+max_steps: 2000

@@ -55,7 +55,7 @@ class MyCombatTaskV1(BaseTask):
         ]
 
     def load_observation_space(self):
-        self.observation_space = spaces.Box(low=-1, high=1., shape=(20,))
+        self.observation_space = spaces.Box(low=-1, high=1., shape=(21,))
 
     def load_action_space(self):
         # aileron, elevator, rudder, throttle

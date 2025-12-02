@@ -53,7 +53,7 @@ class MyRewardFunctionV1(BaseRewardFunction):
         self.w_turn     = getattr(config, "w_turn",    0.05)  # 圈内机动
 
         # 黏斗相关权重
-        self.w_stick      = getattr(config, "w_stick", 0.25)   # WEZ 连续驻留奖励（每步）
+        self.w_stick      = getattr(config, "w_stick", 0.30)   # WEZ 连续驻留奖励（每步）
         self.w_approach   = getattr(config, "w_approach", 0.30) # 圈外接近奖励
         self.w_disengage  = getattr(config, "w_disengage", 0.05) # 脱离趋势惩罚
         self.stick_max    = getattr(config, "stick_max",  80)   # streak 上限（步）
@@ -79,6 +79,11 @@ class MyRewardFunctionV1(BaseRewardFunction):
 
     def get_reward(self, task, env, agent_id):
         self._reset_if_first_step(env)
+
+        extra_noeng_penalty = 0.0
+        if hasattr(env, "noeng_penalty"):
+            # 用 pop 取出来，防止下一步重复扣
+            extra_noeng_penalty = float(env.noeng_penalty.pop(agent_id, 0.0))
 
         ego = env.agents[agent_id]
         ego_obs = ego.my_state
@@ -194,6 +199,7 @@ class MyRewardFunctionV1(BaseRewardFunction):
             + float(disengage_pen)
             + float(terminal_bonus)
             + float(soft_oob)
+            + float(extra_noeng_penalty)
         )
         total = _safe_scalar(total, -10.0, 10.0)
 
@@ -222,6 +228,7 @@ class MyRewardFunctionV1(BaseRewardFunction):
             "elev_off": float(elev_off),
             "in_wez": float(1.0 if in_wez else 0.0),
             "wez_streak": float(streak),
+            "noeng_penalty": float(extra_noeng_penalty),
         }
         try:
             env.log_step_components(agent_id, components)

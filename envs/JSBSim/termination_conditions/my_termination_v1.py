@@ -6,17 +6,18 @@ class MyTerminationV1(BaseTerminationCondition):
     def __init__(self, config):
         super().__init__(config)
         # 基础：步数/高度/边界
-        self.max_steps       = getattr(config, "max_steps", 1000)
+        self.max_steps       = getattr(config, "max_steps", 2000)
         self.altitude_limit  = getattr(config, "altitude_limit", 20.0)   # m（低于则坠毁）
         self.arena_size      = getattr(config, "arena_size", 550.0)      # |x|,|y| 硬边界
 
         # 新增：出界宽限（连续 N 步在界外才终止）
         self.oob_grace_steps = getattr(config, "oob_grace_steps", 60)    # 例如 60 步≈3s（dt=0.05）
         # 新增：无交战（长时间不靠近/不对准 判定为脱战平局）
-        self.noeng_R_min     = getattr(config, "noeng_R_min", 250.0)     # 超过此距离才考虑“无交战”
+        self.noeng_R_min     = getattr(config, "noeng_R_min", 350.0)     # 超过此距离才考虑“无交战”
         self.noeng_dR_eps    = getattr(config, "noeng_dR_eps", 2.0)      # 水平距离变化阈值 m/步（≈40m/s 用 dt 换算）
         self.noeng_dAO_eps   = getattr(config, "noeng_dAO_eps", 0.01)    # AO 变化阈值 rad/步（≈0.6°/s）
-        self.noeng_patience  = getattr(config, "noeng_patience", 200)    # 连续步数容忍（≈10s）
+        self.noeng_patience  = getattr(config, "noeng_patience", 400)    # 连续步数容忍（≈10s）
+        self.noeng_penalty_value = getattr(config, "noeng_penalty_value", 1.0)
         # 既防“刷平局”，又避免“你追我逃”无限拖延
 
         # 缓存
@@ -144,6 +145,12 @@ class MyTerminationV1(BaseTerminationCondition):
         if self._noeng_cnt[agent_id] >= self.noeng_patience:
             self.log(f"[NoEngagement] {agent_id} draw: R={R_h:.1f}, dR={dR:.2f}, dAO={dAO:.3f}")
             info["term_reason"] = "no_engagement"
+
+            if not hasattr(env, "noeng_penalty"):
+                env.noeng_penalty = {}
+            # 对当前 agent 记一笔负奖励（注意是负数）
+            env.noeng_penalty[agent_id] = -float(self.noeng_penalty_value)
+
             return True, False, info
 
         # 缓存更新
