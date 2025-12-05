@@ -28,7 +28,7 @@ class MyRewardFunctionV1(BaseRewardFunction):
         # —— 安全与几何参数 ——
         self.safe_altitude   = getattr(config, "safe_altitude", 50.0)  # m
         self.danger_altitude = getattr(config, "danger_altitude", 40.0) # m
-        self.hp_scale = getattr(config, "hp_scale", 100.0)
+        self.hp_scale = getattr(config, "hp_scale", 200.0)
         self.Kv       = getattr(config, "Kv", 10.0)
 
         # 作战圈/目标距离（与你给的一致）
@@ -47,19 +47,19 @@ class MyRewardFunctionV1(BaseRewardFunction):
         self.soft_band_weight  = getattr(config, "soft_band_weight", 0.5)
 
         # 姿态/低空/圈内机动权重
-        self.w_posture  = getattr(config, "w_posture", 2.0)
-        self.w_altitude = getattr(config, "w_altitude", 0.1)
-        self.w_trend    = getattr(config, "w_trend",   0.10)  # AO 变小趋势
-        self.w_turn     = getattr(config, "w_turn",    0.05)  # 圈内机动
+        self.w_posture  = getattr(config, "w_posture", 5.0)
+        self.w_altitude = getattr(config, "w_altitude", 0.5)
+        self.w_trend    = getattr(config, "w_trend",   0.50)  # AO 变小趋势
+        self.w_turn     = getattr(config, "w_turn",    0.25)  # 圈内机动
 
         # 黏斗相关权重
-        self.w_stick      = getattr(config, "w_stick", 0.30)   # WEZ 连续驻留奖励（每步）
-        self.w_approach   = getattr(config, "w_approach", 0.30) # 圈外接近奖励
-        self.w_disengage  = getattr(config, "w_disengage", 0.05) # 脱离趋势惩罚
+        self.w_stick      = getattr(config, "w_stick", 1.50)   # WEZ 连续驻留奖励（每步）
+        self.w_approach   = getattr(config, "w_approach", 1.50) # 圈外接近奖励
+        self.w_disengage  = getattr(config, "w_disengage", 0.25) # 脱离趋势惩罚
         self.stick_max    = getattr(config, "stick_max",  80)   # streak 上限（步）
 
         # 终局
-        self.kill_bonus = getattr(config, "kill_bonus",  4.0)
+        self.kill_bonus = getattr(config, "kill_bonus",  15.0)
         self.death_pen  = getattr(config, "death_pen",  -4.0)
 
         # 缓存

@@ -121,40 +121,40 @@ class MyTerminationV1(BaseTerminationCondition):
             info["term_reason"] = "enemy_dead"
             return True, True, info
 
-        # 5) 无交战/脱战判定（防止“越拉越远”的无限局）
-        #    利用你已有的 AO / 水平距离，并用上一帧缓存估计 dR、dAO
-        ego_feat = np.concatenate([my_state[0:3],  my_state[6:9]]).astype(np.float32)
-        enm_feat = np.concatenate([enemy_state[0:3], enemy_state[6:9]]).astype(np.float32)
-        AO, TA, R_h = task.get2d_AO_TA_R_ue(ego_feat, enm_feat)  # AO(rad), R_h(m)
-        if AO is None or np.isnan(AO):  AO = 3.14159
-        if R_h is None or np.isnan(R_h): R_h = 1e9
-        AO  = float(np.clip(AO, 0.0, math.pi))
-        R_h = float(np.clip(R_h, 0.0, 1e9))
-
-        last_Rh = self._last_Rh.get(agent_id, R_h)
-        last_AO = self._last_AO.get(agent_id, AO)
-        dR      = R_h - last_Rh
-        dAO     = AO  - last_AO
-
-        # 条件：离得远（>noeng_R_min）且既不靠近也不对准（|dR| 小，|dAO| 小）
-        if R_h > self.noeng_R_min and abs(dR) < self.noeng_dR_eps and abs(dAO) < self.noeng_dAO_eps:
-            self._noeng_cnt[agent_id] = self._noeng_cnt.get(agent_id, 0) + 1
-        else:
-            self._noeng_cnt[agent_id] = 0
-
-        if self._noeng_cnt[agent_id] >= self.noeng_patience:
-            self.log(f"[NoEngagement] {agent_id} draw: R={R_h:.1f}, dR={dR:.2f}, dAO={dAO:.3f}")
-            info["term_reason"] = "no_engagement"
-
-            if not hasattr(env, "noeng_penalty"):
-                env.noeng_penalty = {}
-            # 对当前 agent 记一笔负奖励（注意是负数）
-            env.noeng_penalty[agent_id] = -float(self.noeng_penalty_value)
-
-            return True, False, info
-
-        # 缓存更新
-        self._last_Rh[agent_id] = R_h
-        self._last_AO[agent_id] = AO
+        # # 5) 无交战/脱战判定（防止“越拉越远”的无限局）
+        # #    利用你已有的 AO / 水平距离，并用上一帧缓存估计 dR、dAO
+        # ego_feat = np.concatenate([my_state[0:3],  my_state[6:9]]).astype(np.float32)
+        # enm_feat = np.concatenate([enemy_state[0:3], enemy_state[6:9]]).astype(np.float32)
+        # AO, TA, R_h = task.get2d_AO_TA_R_ue(ego_feat, enm_feat)  # AO(rad), R_h(m)
+        # if AO is None or np.isnan(AO):  AO = 3.14159
+        # if R_h is None or np.isnan(R_h): R_h = 1e9
+        # AO  = float(np.clip(AO, 0.0, math.pi))
+        # R_h = float(np.clip(R_h, 0.0, 1e9))
+        #
+        # last_Rh = self._last_Rh.get(agent_id, R_h)
+        # last_AO = self._last_AO.get(agent_id, AO)
+        # dR      = R_h - last_Rh
+        # dAO     = AO  - last_AO
+        #
+        # # 条件：离得远（>noeng_R_min）且既不靠近也不对准（|dR| 小，|dAO| 小）
+        # if R_h > self.noeng_R_min and abs(dR) < self.noeng_dR_eps and abs(dAO) < self.noeng_dAO_eps:
+        #     self._noeng_cnt[agent_id] = self._noeng_cnt.get(agent_id, 0) + 1
+        # else:
+        #     self._noeng_cnt[agent_id] = 0
+        #
+        # if self._noeng_cnt[agent_id] >= self.noeng_patience:
+        #     self.log(f"[NoEngagement] {agent_id} draw: R={R_h:.1f}, dR={dR:.2f}, dAO={dAO:.3f}")
+        #     info["term_reason"] = "no_engagement"
+        #
+        #     if not hasattr(env, "noeng_penalty"):
+        #         env.noeng_penalty = {}
+        #     # 对当前 agent 记一笔负奖励（注意是负数）
+        #     env.noeng_penalty[agent_id] = -float(self.noeng_penalty_value)
+        #
+        #     return True, False, info
+        #
+        # # 缓存更新
+        # self._last_Rh[agent_id] = R_h
+        # self._last_AO[agent_id] = AO
 
         return False, False, info
