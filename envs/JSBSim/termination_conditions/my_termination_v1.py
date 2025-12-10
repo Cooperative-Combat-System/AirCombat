@@ -19,7 +19,7 @@ class MyTerminationV1(BaseTerminationCondition):
     def __init__(self, config):
         super().__init__(config)
         # 基础：步数/高度/边界
-        self.max_steps      = getattr(config, "max_steps", 2000)
+        self.max_steps      = getattr(config, "max_steps", 3000)
         self.altitude_limit = getattr(config, "altitude_limit", 30.0)
         self.arena_size     = getattr(config, "arena_size", 500.0)
 
