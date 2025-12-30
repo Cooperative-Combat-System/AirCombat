@@ -28,6 +28,7 @@ class BaseEnv(gym.Env):
         self.center_lon, self.center_lat, self.center_alt = \
             getattr(self.config, 'battle_field_center', (120.0, 60.0, 0.0))
         self._create_records = False
+        self.use_baseline = getattr(self.config, 'use_baseline', False)
         self.load()
 
     @property

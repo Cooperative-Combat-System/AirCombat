@@ -1,0 +1,7 @@
+task: mycombatv1
+
+host: 10.119.13.38
+agent_ports: [1024, 1026]
+agent_count: 2
+max_steps: 2000
+use_baseline: True

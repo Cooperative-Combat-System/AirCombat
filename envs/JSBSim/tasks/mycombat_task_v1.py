@@ -41,10 +41,11 @@ class MyCombatTaskV1(BaseTask):
         self.termination_conditions = [MyTerminationV1(self.config)]
         self.adaptor = NetworkAdaptorV1(self.config)
         self.truncated = False
+        self.use_baseline = getattr(self.config, 'use_baseline', False)
 
     @property
     def num_agents(self) -> int:
-        return 2
+        return 2 if not self.use_baseline else 1
 
     def load_variables(self):
         self.state_var = [
@@ -64,45 +65,6 @@ class MyCombatTaskV1(BaseTask):
             high=np.array([1.0, 1, 1, 1], dtype=np.float32),
             dtype=np.float32
         )
-
-    # def get_obs(self, env, agent_id):
-    #     my_state = env.agents[agent_id].my_state
-    #     enemy_state = env.agents[agent_id].enemy_state
-    #
-    #     my_pos = np.array(my_state[0:3])
-    #     my_rot = np.array(my_state[3:6])
-    #     my_vel = np.array(my_state[6:9])
-    #     my_forward = np.array(my_state[9:12])
-    #     my_hp = my_state[12]
-    #
-    #     enm_pos = np.array(enemy_state[0:3])
-    #     enm_rot = np.array(enemy_state[3:6])
-    #     enm_vel = np.array(enemy_state[6:9])
-    #     enm_forward = np.array(enemy_state[9:12])
-    #     enm_hp = enemy_state[12]
-    #
-    #     norm_obs = np.zeros(18)
-    #     norm_obs[0] = enm_pos[2] / 100
-    #     norm_obs[1] = np.sin(my_rot[0])  # roll_sin
-    #     norm_obs[2] = np.cos(my_rot[0])  # roll_cos
-    #     norm_obs[3] = np.sin(my_rot[1])  # pitch_sin
-    #     norm_obs[4] = np.cos(my_rot[1])  # pitch_cos
-    #     norm_obs[5:8] = my_vel  # vx, vy, vz（单位化）
-    #     norm_obs[8] = my_hp  # ego_hp
-    #     norm_obs[9] = enm_hp  # enm_hp
-    #
-    #     ego_feature = np.concatenate([my_pos, my_vel])
-    #     enm_feature = np.concatenate([enm_pos, enm_vel])
-    #     AO, TA, R, side_flag = self.get2d_AO_TA_R_ue(ego_feature, enm_feature, return_side=True)
-    #     norm_obs[10] = (enm_vel[0] - my_vel[0])  # delta_vx
-    #     norm_obs[11] = (enm_pos[2] - my_pos[2]) / 100  # delta_height
-    #     norm_obs[12] = AO
-    #     norm_obs[13] = TA
-    #     norm_obs[14] = R / 1000  # 距离单位化
-    #     norm_obs[15] = side_flag
-    #
-    #     norm_obs = np.clip(norm_obs, self.observation_space.low, self.observation_space.high)
-    #     return norm_obs
 
     def get_obs(self, env, agent_id):
         agent = env.agents[agent_id]

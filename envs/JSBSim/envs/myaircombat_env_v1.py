@@ -5,10 +5,11 @@ from ..core.my_agent_v1 import MyAirAgentSimV1
 from ..tasks import MyCombatTaskV1
 import random
 from collections import defaultdict
+from ..model.pid_baseline_agent import DogFightController
 
 def generate_initial_state():
-    my_initial_state = np.array([0, 0, 100, 0, 0, 0, 10, 0, 0, 0, 0, 0])
-    enemy_initial_state = np.array([100, random.uniform(-20,20), 100, 0, 0, 3.14, -10, 0, 0, 0, 0, 0])
+    my_initial_state = np.array([0, 0, 100, 0, 0, 0, 15, 0, 0, 0, 0, 0])
+    enemy_initial_state = np.array([100, random.uniform(-30,30), 100, 0, 0, 3.14, -15, 0, 0, 0, 0, 0])
     return my_initial_state, enemy_initial_state
 
 class AirCombatEnvV1(BaseEnv):
@@ -84,6 +85,11 @@ class AirCombatEnvV1(BaseEnv):
             agent.enemies = [self._air_agent[eid] for eid in
                              (self.enm_ids if agent_id in self.ego_ids else self.ego_ids)]
 
+        self.pid_baselines = {}
+        if self.use_baseline:
+            for eid in self.enm_ids:
+                self.pid_baselines[eid] = DogFightController()
+
     def load(self):
         self.load_task()
         self.load_agent()
@@ -102,6 +108,9 @@ class AirCombatEnvV1(BaseEnv):
         self.task.adaptor.reconnect()
         self.reload_agent()
         self.task.reset(self)
+        if self.use_baseline:
+            for pid_agent in self.pid_baselines.values():
+                pid_agent.reset()
         for agent in self.agents.values():
             agent.observe()
         obs = self.get_obs()
@@ -129,6 +138,13 @@ class AirCombatEnvV1(BaseEnv):
             self.task.truncated = True
         # 解包动作
         unpacked_action = self._unpack(action)
+        if self.use_baseline:
+            for eid, pid_agent in self.pid_baselines.items():
+                my_state = self._air_agent[eid].my_state
+                enemy_state = self._air_agent[eid].enemy_state
+                pid_act = pid_agent.step(my_state, enemy_state, 1/60)
+                unpacked_action[eid] = pid_act
+
         for agent_id, agent in self._air_agent.items():
             norm_action = self.task.normalize_action(self, agent_id, unpacked_action[agent_id])
             self.task.adaptor.send_action(norm_action, agent.port)
