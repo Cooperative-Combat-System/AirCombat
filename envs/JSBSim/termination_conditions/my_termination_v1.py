@@ -20,14 +20,14 @@ class MyTerminationV1(BaseTerminationCondition):
         super().__init__(config)
         # 基础：步数/高度/边界
         self.max_steps      = getattr(config, "max_steps", 3000)
-        self.altitude_limit = getattr(config, "altitude_limit", 30.0)
-        self.arena_size     = getattr(config, "arena_size", 500.0)
+        self.altitude_limit = getattr(config, "altitude_limit", 60.0)
+        self.arena_size     = getattr(config, "arena_size", 2000.0)
 
         # 出界宽限
         self.oob_grace_steps = getattr(config, "oob_grace_steps", 60)
 
         # 无交战判定参数
-        self.enable_noeng     = getattr(config, "enable_noeng", False)  # ★ 训练早期建议 False
+        self.enable_noeng     = getattr(config, "enable_noeng", False)
         self.noeng_R_min      = getattr(config, "noeng_R_min", 250.0)
         self.noeng_dR_eps     = getattr(config, "noeng_dR_eps", 2.0)
         self.noeng_dAO_eps    = getattr(config, "noeng_dAO_eps", 0.01)
