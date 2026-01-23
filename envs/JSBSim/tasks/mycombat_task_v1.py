@@ -6,10 +6,6 @@ from ..termination_conditions import MyTerminationV1
 from ..reward_functions import MyRewardFunctionV1
 from ..utils.adaptor_v1 import NetworkAdaptorV1
 
-R_MAX = 300.0   # m
-H_MAX = 150.0   # m
-V_MAX = 40.0    # m/s
-EPS   = 1e-6
 
 def _rot_world_to_body_xy(dx, dy, yaw):
     """
@@ -20,19 +16,6 @@ def _rot_world_to_body_xy(dx, dy, yaw):
     bx =  c * dx + s * dy
     by = -s * dx + c * dy
     return bx, by
-
-def _clip01(x):
-    return float(np.clip(x, 0.0, 1.0))
-
-def _clip11(x):
-    return float(np.clip(x, -1.0, 1.0))
-
-def _bearing(dx, dy):
-    return float(np.arctan2(dy, dx))  # (-pi, pi]
-
-def _angle_wrap_pi(a):
-    # wrap to (-pi, pi]
-    return float((a + np.pi) % (2*np.pi) - np.pi)
 
 class MyCombatTaskV1(BaseTask):
     def __init__(self, config):
@@ -56,7 +39,7 @@ class MyCombatTaskV1(BaseTask):
         ]
 
     def load_observation_space(self):
-        self.observation_space = spaces.Box(low=-1, high=1., shape=(21,))
+        self.observation_space = spaces.Box(low=-10, high=10., shape=(15,))
 
     def load_action_space(self):
         # aileron, elevator, rudder, throttle
@@ -84,93 +67,65 @@ class MyCombatTaskV1(BaseTask):
         # 相对量（世界系）
         dx, dy, dz = (ex - mx), (ey - my), (ez - mz)
         dvx, dvy, dvz = (evx - mvx), (evy - mvy), (evz - mvz)
-
-        # 机体系（用 yaw 旋转）
-        rel_bx, rel_by = _rot_world_to_body_xy(dx, dy, myaw)
-        rel_vbx, rel_vby = _rot_world_to_body_xy(dvx, dvy, myaw)
-
-        # 距离、速度
-        Rh = float(np.hypot(dx, dy))
-        my_spd = float(np.hypot(mvx, mvy))
-        enm_spd = float(np.hypot(evx, evy))
-
-        dist_feat = _clip01(Rh / max(R_MAX, EPS))
-        rel_height = _clip11(dz / max(H_MAX, EPS))
-        rel_pos_body_x = _clip11(rel_bx / max(R_MAX, EPS))
-        rel_pos_body_y = _clip11(rel_by / max(R_MAX, EPS))
-        rel_vel_body_x = _clip11(rel_vbx / max(V_MAX, EPS))
-        rel_vel_body_y = _clip11(rel_vby / max(V_MAX, EPS))
-        my_spd_n = _clip01(my_spd / max(V_MAX, EPS))
-        enm_spd_n = _clip01(enm_spd / max(V_MAX, EPS))
-
-        # 自机高度/垂直速度（配合奖励）
-        my_alt_n = _clip01(mz / max(H_MAX, EPS))
-        my_vz_n = _clip11(mvz / max(15, EPS))  # VZ_MAX 你自己定义一个常量
-
-        # AO/TA/R_h：复用几何函数
+        ego_vbx, ego_vby = _rot_world_to_body_xy(mvx, mvy, myaw)
+        ego_vbz = mvz
+        delta_vbx, _delta_vby = _rot_world_to_body_xy(dvx, dvy, myaw)
+        ego_vc = float(np.hypot(mvx, mvy))  # world horizontal speed magnitude
+        Rh = float(np.hypot(dx, dy))  # horizontal distance
+        R3 = float(np.sqrt(dx * dx + dy * dy + dz * dz))  # 3D distance
         ego_feature = np.array([mx, my, mz, mvx, mvy, mvz], dtype=np.float32)
         enm_feature = np.array([ex, ey, ez, evx, evy, evz], dtype=np.float32)
-        AO, TA, _Rh = self.get2d_AO_TA_R_ue(ego_feature, enm_feature)
+        AO, TA, R, side_flag = self.get2d_AO_TA_R_ue(ego_feature, enm_feature, return_side=True)
         AO = float(np.clip(AO, 0.0, np.pi))
         TA = float(np.clip(TA, 0.0, np.pi))
-        facing_cos = float(np.cos(AO))
-        aspect_cos = float(np.cos(TA))  # 新增
 
-        # 闭合率：径向速度 / V_MAX
-        if Rh > 1e-3:
-            Vr = (dx * dvx + dy * dvy) / Rh
-        else:
-            Vr = 0.0
-        closure = _clip11(Vr / max(V_MAX, EPS))
-
-        # LOS 角速率
-        if not hasattr(env, "_obs_cache"):
-            env._obs_cache = {}
-        if agent_id not in env._obs_cache:
-            env._obs_cache[agent_id] = {}
-        prev_bearing = env._obs_cache[agent_id].get("bearing", _bearing(dx, dy))
-        curr_bearing = _bearing(dx, dy)
-        dpsi = _angle_wrap_pi(curr_bearing - prev_bearing)
-        env._obs_cache[agent_id]["bearing"] = curr_bearing
-        los_rate = _clip11(dpsi / np.pi)
-
-        # 姿态 sin/cos
         roll_s, roll_c = float(np.sin(mr)), float(np.cos(mr))
         pitch_s, pitch_c = float(np.sin(mp)), float(np.cos(mp))
 
-        # HP 归一化
-        if my_hp > 1.0 or enm_hp > 1.0:
-            my_hp_n = _clip01(my_hp / 100.0)
-            enm_hp_n = _clip01(enm_hp / 100.0)
-        else:
-            my_hp_n, enm_hp_n = _clip01(my_hp), _clip01(enm_hp)
+        h_scale = 500
+        v_scale = 30
+        # [0] ego altitude
+        ego_alt_n = mz / h_scale
 
-        # 侧向标志
-        cross_z = mvx * dy - mvy * dx
-        side_flag = float(np.sign(cross_z))
+        # [5-7] ego v_body_x/y/z
+        ego_vbx_n = ego_vbx / v_scale
+        ego_vby_n = ego_vby / v_scale
+        ego_vbz_n = ego_vbz / v_scale
+
+        # [8] ego_vc
+        ego_vc_n = ego_vc / v_scale
+
+        # [9] delta_v_body_x
+        delta_vbx_n = delta_vbx / v_scale
+
+        # [10] delta_altitude
+        delta_alt_n = dz / h_scale
+
+        # [11-12] ego_AO / ego_TA
+        # 方案A（推荐）：归一到 [0,1]，避免 observation_space 还要设到 pi
+        ego_AO_n = AO / np.pi
+        ego_TA_n = TA / np.pi
+
+
+        # [13] relative distance（用 3D 距离 or 水平距离，你没写清，我用 3D）
+        rel_dist_n = R3 / 1000
 
         obs = np.array([
-            rel_pos_body_x,  # 0
-            rel_pos_body_y,  # 1
-            rel_height,  # 2
-            dist_feat,  # 3
-            rel_vel_body_x,  # 4
-            rel_vel_body_y,  # 5
-            my_spd_n,  # 6
-            enm_spd_n,  # 7
-            my_alt_n,  # 8  (new)
-            my_vz_n,  # 9  (new)
-            facing_cos,  # 10
-            aspect_cos,  # 11 (new)
-            closure,  # 12
-            los_rate,  # 13
-            roll_s,  # 14
-            roll_c,  # 15
-            pitch_s,  # 16
-            pitch_c,  # 17
-            my_hp_n,  # 18
-            enm_hp_n,  # 19
-            side_flag  # 20
+            ego_alt_n,  # 0
+            roll_s,  # 1
+            roll_c,  # 2
+            pitch_s,  # 3
+            pitch_c,  # 4
+            ego_vbx_n,  # 5
+            ego_vby_n,  # 6
+            ego_vbz_n,  # 7
+            ego_vc_n,  # 8
+            delta_vbx_n,  # 9
+            delta_alt_n,  # 10
+            ego_AO_n,  # 11
+            ego_TA_n,  # 12
+            rel_dist_n,  # 13
+            side_flag  # 14  (-1/0/1)
         ], dtype=np.float32)
 
         obs = np.clip(obs, env.observation_space.low, env.observation_space.high)
@@ -215,6 +170,7 @@ class MyCombatTaskV1(BaseTask):
         if not return_side:
             return ego_AO, ego_TA, R
         else:
-            side_flag = np.sign(np.cross([ego_vx, ego_vy], [delta_x, delta_y]))
+            cross_z = ego_vx * delta_y - ego_vy * delta_x
+            side_flag = float(np.sign(cross_z)) if abs(cross_z) > 1e-6 else 0.0
             return ego_AO, ego_TA, R, side_flag
 

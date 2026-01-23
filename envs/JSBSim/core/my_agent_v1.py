@@ -74,3 +74,25 @@ class MyAirAgentSimV1:
         self.my_state = my_state
         self.enemy_state = enemy_state
         self.done = terminated
+
+    def get_position(self):
+        """
+        获取当前位置。
+        """
+        return self.my_state[:3]
+
+    def get_velocity(self):
+        """
+        获取当前速度。
+        """
+        return self.my_state[6:9]
+
+    def get_result(self):
+        my_hp = self.my_state[-1]
+        enemy_hp = self.enemy_state[-1]
+        if my_hp <= 0.2:
+            return -1
+        elif enemy_hp <= 0.2:
+            return 1
+        else:
+            return 0
