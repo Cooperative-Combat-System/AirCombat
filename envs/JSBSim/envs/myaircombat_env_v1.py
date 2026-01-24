@@ -9,7 +9,7 @@ from ..model.pid_baseline_agent import DogFightController
 
 def generate_initial_state():
     my_initial_state = np.array([0, 0, 600, 0, 0, 0, 25, 0, 0, 0, 0, 0])
-    enemy_initial_state = np.array([550, 0, 600, 0, 0, 3.14, -25, 0, 0, 0, 0, 0])
+    enemy_initial_state = np.array([550, 0, 600, 0, 0, np.pi, -25, 0, 0, 0, 0, 0])
     return my_initial_state, enemy_initial_state
 
 class AirCombatEnvV1(BaseEnv):

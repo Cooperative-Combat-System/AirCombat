@@ -5,17 +5,15 @@ from .task_base import BaseTask
 from ..termination_conditions import MyTerminationV1
 from ..reward_functions import MyRewardFunctionV1
 from ..utils.adaptor_v1 import NetworkAdaptorV1
+from scipy.spatial.transform import Rotation as R
 
-
-def _rot_world_to_body_xy(dx, dy, yaw):
-    """
-    用 yaw 做 2D 机体系旋转（机头为 +x，右侧为 +y）
-    body = R(-yaw) * world
-    """
-    c, s = np.cos(yaw), np.sin(yaw)
-    bx =  c * dx + s * dy
-    by = -s * dx + c * dy
-    return bx, by
+def world_to_body_R(roll, pitch, yaw):
+    # roll/pitch/yaw 都是 radians
+    # UE Rotator 语义：Roll about X, Pitch about Y, Yaw about Z
+    # 组合：Rz(yaw) * Ry(pitch) * Rx(roll)
+    C_b2w = R.from_euler('ZYX', [yaw, pitch, roll], degrees=False).as_matrix()
+    C_w2b = C_b2w.T
+    return C_w2b
 
 class MyCombatTaskV1(BaseTask):
     def __init__(self, config):
@@ -45,7 +43,7 @@ class MyCombatTaskV1(BaseTask):
         # aileron, elevator, rudder, throttle
         self.action_space = spaces.Box(
             low=np.array([0.4, -1, -1, -1], dtype=np.float32),
-            high=np.array([1.0, 1, 1, 1], dtype=np.float32),
+            high=np.array([0.9, 1, 1, 1], dtype=np.float32),
             dtype=np.float32
         )
 
@@ -61,15 +59,17 @@ class MyCombatTaskV1(BaseTask):
         my_hp = float(my_state[12])
 
         ex, ey, ez = float(enm_state[0]), float(enm_state[1]), float(enm_state[2])
+        er, ep, eyaw = float(enm_state[3]), float(enm_state[4]), float(enm_state[5])
         evx, evy, evz = float(enm_state[6]), float(enm_state[7]), float(enm_state[8])
         enm_hp = float(enm_state[12])
 
         # 相对量（世界系）
         dx, dy, dz = (ex - mx), (ey - my), (ez - mz)
-        dvx, dvy, dvz = (evx - mvx), (evy - mvy), (evz - mvz)
-        ego_vbx, ego_vby = _rot_world_to_body_xy(mvx, mvy, myaw)
-        ego_vbz = mvz
-        delta_vbx, _delta_vby = _rot_world_to_body_xy(dvx, dvy, myaw)
+        ego_body_v = world_to_body_R(mr, mp, myaw) @ np.array([mvx, mvy, mvz])
+        ego_vbx, ego_vby = ego_body_v[0], ego_body_v[1]
+        ego_vbz = ego_body_v[2]
+        enm_body_v = world_to_body_R(er, ep, eyaw) @ np.array([evx, evy, evz])
+        delta_vbx, _delta_vby = enm_body_v[0] - ego_vbx, enm_body_v[1] - ego_vby
         ego_vc = float(np.hypot(mvx, mvy))  # world horizontal speed magnitude
         Rh = float(np.hypot(dx, dy))  # horizontal distance
         R3 = float(np.sqrt(dx * dx + dy * dy + dz * dz))  # 3D distance

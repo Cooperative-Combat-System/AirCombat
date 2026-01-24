@@ -8,7 +8,6 @@ class MyTerminationV1(BaseTerminationCondition):
         # 基础：步数/高度/边界
         self.max_steps      = getattr(config, "max_steps", 1000)
         self.altitude_limit = getattr(config, "altitude_limit", 300.0)
-        self.arena_size     = getattr(config, "arena_size", 5000.0)
 
 
     def get_termination(self, task, env, agent_id, info={}):
@@ -30,31 +29,6 @@ class MyTerminationV1(BaseTerminationCondition):
         if my_alt <= self.altitude_limit:
             self.log(f"[LowAltitude] {agent_id} crashed, z={my_alt:.2f}")
             info["term_reason"] = "crash_low_alt"
-            return True, False, info
-
-        # 3) 出界宽限（我 & 敌）
-        my_x, my_y       = float(my_state[0]), float(my_state[1])
-        enemy_x, enemy_y = float(enemy_state[0]), float(enemy_state[1])
-
-        my_oob  = (abs(my_x) > self.arena_size) or (abs(my_y) > self.arena_size)
-        enm_oob = (abs(enemy_x) > self.arena_size) or (abs(enemy_y) > self.arena_size)
-
-        # 同时出界到宽限 → 平局
-        if my_oob and enm_oob:
-            self.log(f"[BothOutOfBounds] {agent_id} draw after grace")
-            info["term_reason"] = "both_oob"
-            return True, False, info
-
-        # 敌方出界到宽限 → 我胜
-        if enm_oob:
-            self.log(f"[EnemyOutOfBounds] {agent_id} wins (enemy oob)")
-            info["term_reason"] = "enemy_oob"
-            return True, True, info
-
-        # 我方出界到宽限 → 我负
-        if my_oob:
-            self.log(f"[OutOfBounds] {agent_id} lost (self oob)")
-            info["term_reason"] = "self_oob"
             return True, False, info
 
         # 4) HP 终止/平局
