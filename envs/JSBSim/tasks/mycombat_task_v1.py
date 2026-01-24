@@ -170,7 +170,6 @@ class MyCombatTaskV1(BaseTask):
         if not return_side:
             return ego_AO, ego_TA, R
         else:
-            cross_z = ego_vx * delta_y - ego_vy * delta_x
-            side_flag = float(np.sign(cross_z)) if abs(cross_z) > 1e-6 else 0.0
+            side_flag = np.sign(np.cross([ego_vx, ego_vy], [delta_x, delta_y]))
             return ego_AO, ego_TA, R, side_flag
 
