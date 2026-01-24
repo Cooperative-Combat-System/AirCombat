@@ -83,7 +83,7 @@ class MyCombatTaskV1(BaseTask):
         pitch_s, pitch_c = float(np.sin(mp)), float(np.cos(mp))
 
         h_scale = 500
-        v_scale = 30
+        v_scale = 10
         # [0] ego altitude
         ego_alt_n = mz / h_scale
 
@@ -108,7 +108,7 @@ class MyCombatTaskV1(BaseTask):
 
 
         # [13] relative distance（用 3D 距离 or 水平距离，你没写清，我用 3D）
-        rel_dist_n = R3 / 1000
+        rel_dist_n = R3 / 100
 
         obs = np.array([
             ego_alt_n,  # 0
